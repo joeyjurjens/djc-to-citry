@@ -62,9 +62,12 @@ class ComponentTransformer(cst.CSTTransformer):
         base: str = "Component",
         renames: dict[str, str] | None = None,
         app: str = "",
+        tag_prefix: str = "",
     ):
         self.base = base
         self.app = app
+        self.tag_prefix = tag_prefix
+        self.needs_sibling = False
         self.needs_context_stash = False
         self.needs_markup = False
         self._in_render_hook = False
@@ -100,6 +103,15 @@ class ComponentTransformer(cst.CSTTransformer):
             for b in original_node.bases
         ):
             updated_node = updated_node.with_changes(bases=[cst.Arg(value=cst.Name(self.base))])
+            if self.tag_prefix:
+                # Citry derives the tag from the class name; a prefixed library
+                # has to say the name it publishes.
+                tag = self.tag_prefix + _kebab(name)
+                binding = cst.parse_statement(f'name = "{tag}"')
+                body = updated_node.body
+                updated_node = updated_node.with_changes(
+                    body=body.with_changes(body=[binding, *body.body])
+                )
             if self.app and self.base == "Component":
                 # An ordinary component belongs to one engine; a library
                 # definition may not name one at all.
@@ -153,6 +165,14 @@ class ComponentTransformer(cst.CSTTransformer):
             )
         dotted = _dotted(updated_node.module) if updated_node.module else ""
         root = dotted.split(".")[0]
+        # An explicit rename wins over everything: it is how a project says
+        # where a module went, including a Django utility it wants replaced.
+        for old, new in self.renames.items():
+            if dotted == old or dotted.startswith(f"{old}."):
+                return updated_node.with_changes(
+                    module=cst.parse_expression(new + dotted[len(old) :])
+                )
+
         if root == "django_components":
             self._account_for(names)
             return cst.RemoveFromParent()
@@ -259,7 +279,16 @@ class ComponentTransformer(cst.CSTTransformer):
         call_args = [cst.Arg(value=args["kwargs"], star="**")]
         if "slots" in args:
             call_args.append(cst.Arg(keyword=cst.Name("slots"), value=args["slots"]))
-        element = cst.Call(func=func.value, args=call_args)
+        target = func.value
+        if self.tag_prefix and isinstance(target, cst.Name) and self._cls:
+            # Naming the class binds this call to one manifest; a library that
+            # is republished under another prefix, or has that component
+            # replaced, would still reach the original. Resolve by name.
+            self.needs_sibling = True
+            target = cst.parse_expression(
+                f'_sibling(self, "{_kebab(self._cls[-1])}", "{_kebab(target.value)}")'
+            )
+        element = cst.Call(func=target, args=call_args)
         # on_render() accepts a composed element, and a library component has no
         # engine to serialise against on its own
         if self._in_render_hook:
@@ -357,7 +386,7 @@ TEMPLATE_RE = re.compile(
 )
 
 
-def rewrite_templates(source: str, classes: dict, mode: str = "pure"):
+def rewrite_templates(source: str, classes: dict, mode: str = "pure", tag_prefix: str = ""):
     """Translate every inline ``template`` block; return (source, per-class info)."""
     info: dict[str, object] = {}
     shapes = dict_sequences(source)
@@ -368,7 +397,12 @@ def rewrite_templates(source: str, classes: dict, mode: str = "pure"):
         i = idx[0]
         idx[0] += 1
         cls = order[i] if i < len(order) else f"<class#{i}>"
-        res = translate(m.group("body"), mode=mode, dict_sequences=frozenset(shapes.get(cls, ())))
+        res = translate(
+            m.group("body"),
+            mode=mode,
+            dict_sequences=frozenset(shapes.get(cls, ())),
+            prefix=tag_prefix,
+        )
         parse_template(res.template)  # citry's parser is the authority
         info[cls] = res
         ind = m.group("indent")
@@ -378,8 +412,8 @@ def rewrite_templates(source: str, classes: dict, mode: str = "pure"):
             for ln in res.template.strip().splitlines()
         )
         # a backslash in the template must survive the Python literal
-        prefix = "r" if "\\" in body else ""
-        return f'{notes}{ind}template = {prefix}"""\n{body}\n{ind}"""'
+        raw = "r" if "\\" in body else ""
+        return f'{notes}{ind}template = {raw}"""\n{body}\n{ind}"""'
 
     return TEMPLATE_RE.sub(one, source), info
 
@@ -505,13 +539,14 @@ def migrate_source(
     renames: dict[str, str] | None = None,
     known: frozenset[str] = frozenset(),
     app: str = "",
+    tag_prefix: str = "",
 ):
     classes = dict.fromkeys(n for n, _, _ in class_spans(source, "Component"))
-    source, info = rewrite_templates(source, classes, mode=mode)
+    source, info = rewrite_templates(source, classes, mode=mode, tag_prefix=tag_prefix)
     wanted = {(module, name) for r in info.values() for module, name in r.imports}
 
     tree = cst.parse_module(source)
-    tf = ComponentTransformer(base=base, renames=renames, app=app)
+    tf = ComponentTransformer(base=base, renames=renames, app=app, tag_prefix=tag_prefix)
     tf.needs_merge_attrs = ("citry", "merge_attrs") in wanted
     tf.needs_markup = ("citry", "Markup") in wanted or "mark_safe" in source
     tf.defaults = declared_defaults(source)
@@ -527,6 +562,8 @@ def migrate_source(
             extra.append(f"from {module} import {name}")
     if extra:
         out = "\n".join(extra) + "\n" + out
+    if tf.needs_sibling:
+        out = _after_imports(out, SIBLING)
     _refuse_undefined(out, tf.dropped, known)
     return out, info
 
@@ -550,10 +587,13 @@ def migrate_module(
     mode: str = "pure",
     renames: dict[str, str] | None = None,
     app: str = "",
+    tag_prefix: str = "",
 ):
     """Whole module at once; per-class on refusal, collecting a Marker each."""
     try:
-        out, info = migrate_source(source, base=base, mode=mode, renames=renames, app=app)
+        out, info = migrate_source(
+            source, base=base, mode=mode, renames=renames, app=app, tag_prefix=tag_prefix
+        )
     except Unmigratable:
         pass
     else:
@@ -564,7 +604,13 @@ def migrate_module(
     for i, (name, block) in enumerate(split_classes(source)):
         try:
             got, info = migrate_source(
-                block, base=base, mode=mode, renames=renames, known=known, app=app
+                block,
+                base=base,
+                mode=mode,
+                renames=renames,
+                known=known,
+                app=app,
+                tag_prefix=tag_prefix,
             )
         except Unmigratable as e:
             markers.append(e.marker.at(name))
@@ -603,6 +649,31 @@ def scan_module(source: str, mode: str = "pure") -> list[dict]:
                 }
         rows.append(row)
     return rows
+
+
+def _after_imports(source: str, block: str) -> str:
+    """Insert a helper below the import block, where a definition belongs."""
+    tree = ast.parse(source)
+    imports = [n for n in tree.body if isinstance(n, ast.Import | ast.ImportFrom)]
+    if not imports:
+        return block + source
+    lines = source.split("\n")
+    at = max(n.end_lineno or n.lineno for n in imports)
+    return "\n".join(lines[:at] + ["", block.rstrip()] + lines[at:])
+
+
+SIBLING = '''def _sibling(component, own, wanted):
+    """A component of the same library, under whatever prefix it is published."""
+    return component.citry.get(component.name.removesuffix(own) + wanted)
+
+
+'''
+
+
+def _kebab(name: str) -> str:
+    """The tag citry would derive from a class name."""
+    spaced = re.sub(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", "-", name)
+    return spaced.replace("_", "-").lower()
 
 
 def _annotated_name(statement) -> str | None:

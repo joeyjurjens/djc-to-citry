@@ -45,7 +45,12 @@ def migrate(args) -> int:
 
     source = pathlib.Path(args.path).read_text()
     out, markers, ok = migrate_module(
-        source, base=args.base, mode=args.mode, renames=dict(args.rename), app=args.app
+        source,
+        base=args.base,
+        mode=args.mode,
+        renames=dict(args.rename),
+        app=args.app,
+        tag_prefix=args.tag_prefix,
     )
 
     if ok == 0 and markers:
@@ -155,6 +160,12 @@ COMMANDS = (
                 default="Component",
                 choices=["Component", "LibraryComponent"],
                 help="Component for a project, LibraryComponent for a distributable library",
+            ),
+            arg(
+                "--tag-prefix",
+                default="",
+                metavar="bs-",
+                help="publish every component under this tag prefix, internal references included",
             ),
             arg(
                 "--app",

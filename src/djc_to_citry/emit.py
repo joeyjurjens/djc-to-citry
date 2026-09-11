@@ -81,9 +81,10 @@ def tag_name(name: str) -> str:
 class Writer:
     """Collects what the walk produces for one template."""
 
-    def __init__(self, source: str, mode: str):
+    def __init__(self, source: str, mode: str, prefix: str = ""):
         self.source = source
         self.mode = mode
+        self.prefix = prefix
         self.dict_sequences: frozenset[str] = frozenset()
         self.result = Translation("")
         self.regions = regions(source)
@@ -169,7 +170,7 @@ def _fill(node, w: Writer) -> tuple[str, str]:
 
 
 def _component(node, w: Writer) -> tuple[str, str]:
-    name = tag_name(node.name)
+    name = w.prefix + tag_name(node.name)
     w.result.components.add(node.name)
     return f"<c-{name}{w.keywords(node)}>", f"</c-{name}>"
 
@@ -524,7 +525,10 @@ def _open_for(node, w: Writer, source: str) -> tuple[str, Frame]:
 
 
 def translate(
-    source: str, mode: str = "pure", dict_sequences: frozenset[str] = frozenset()
+    source: str,
+    mode: str = "pure",
+    dict_sequences: frozenset[str] = frozenset(),
+    prefix: str = "",
 ) -> Translation:
     from django.template import engines
     from django.template.base import Parser
@@ -532,7 +536,7 @@ def translate(
 
     engine = engines["django"].engine
     parser = Parser([], libraries=engine.template_libraries, builtins=engine.template_builtins)
-    w = Writer(source, mode)
+    w = Writer(source, mode, prefix)
     w.result.needs.dicts = frozenset()
     w.dict_sequences = dict_sequences
     nodelist = engine.from_string(source).nodelist
