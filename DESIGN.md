@@ -97,11 +97,13 @@ Some Django behaviour has no single Python equivalent. The tool does not guess; 
 
 **The loop variable.** Citry has none. A body that reads `forloop` gets its index from an enumeration the component prepares.
 
-**Constant inputs.** Citry marks a value it knows at parse time with a transparent proxy, so `x is True` is False and `re`, `str.join` and `os.fspath` reject it. Django code that reaches `template_data` assumes ordinary values, so every rewritten data method opens by unwrapping its inputs with an emitted `_plain(kwargs)`. An engine extension would be the wrong place: its only input hook mutates citry's authoritative mapping, for every component in the application, not just the migrated ones. A library that gives its components a shared base class can unwrap there instead, once: `--base mylib.component.Base --unwrap base` emits the import, drops the helper, and leaves the unwrapping to the base.
+**Constant inputs.** Citry marks a value it knows at parse time with a transparent proxy, so `x is True` is False and `re`, `str.join` and `os.fspath` reject it. Django code that reaches `template_data` assumes ordinary values, so every rewritten data method opens by unwrapping its inputs with an emitted `_plain(kwargs)`. An engine extension would be the wrong place: its only input hook mutates citry's authoritative mapping, for every component in the application, not just the migrated ones. A library that gives its components a shared base class can unwrap there instead, once: `--base mylib.component.Base --unwrap base` emits the import, drops the helper, and leaves the unwrapping to the base. `--unwrap extension` drops it in favour of the `PlainInputs` extension the tool ships, which unwraps before citry builds the typed `Kwargs` and marks the pass-through values again before citry reads them back, so the engine's precompute is unchanged. There the tool marks the code that depends on the extension being installed: an identity test and a call into an API that rejects the proxy are decidable from the code, a call into a helper that does either of those inside is not.
 
 ## Modules
 
 ```
+constness.py where citry's constant proxy would break the migrated Python
+extension.py the PlainInputs extension, written into the target project
 locate.py    the join: Django's AST against citry's HTML structure
 expr.py      Django expressions to Python
 emit.py      one emitter per node class; the replacements

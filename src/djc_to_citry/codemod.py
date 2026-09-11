@@ -10,6 +10,7 @@ from typing import Any
 import libcst as cst
 from citry_core.template_parser import parse_template
 
+from .constness import advise
 from .emit import Marker, translate
 
 # The Python side of the move. A django-components hook either has a citry
@@ -624,7 +625,8 @@ def migrate_module(
     except Unmigratable:
         pass
     else:
-        return out, _markers(info), len(list(split_classes(source)))
+        advice = advise(out) if unwrap == "extension" else []
+        return out, _markers(info) + advice, len(list(split_classes(source)))
 
     known = module_names(source)
     pieces, markers, ok = [], [], 0
@@ -646,7 +648,10 @@ def migrate_module(
             pieces.append(got if i == 0 else got[got.index(f"class {name}(") :])
             markers.extend(_markers(info))
             ok += 1
-    return "\n\n".join(pieces), markers, ok
+    out = "\n\n".join(pieces)
+    if unwrap == "extension" and out:
+        markers.extend(advise(out))
+    return out, markers, ok
 
 
 def scan_module(source: str, mode: str = "pure") -> list[dict]:

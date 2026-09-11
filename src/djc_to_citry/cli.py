@@ -141,6 +141,20 @@ def template(args) -> int:
     return 1 if failed else 0
 
 
+def extension(args) -> int:
+    from . import extension as module
+
+    source = pathlib.Path(module.__file__).read_text()
+    if args.out:
+        target = pathlib.Path(args.out)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(source)
+        print(f"wrote {target}", file=sys.stderr)
+    else:
+        print(source, end="")
+    return 0
+
+
 COMMANDS = (
     Command(
         "scan",
@@ -165,9 +179,10 @@ COMMANDS = (
             arg(
                 "--unwrap",
                 default="inline",
-                choices=["inline", "base"],
+                choices=["inline", "base", "extension"],
                 help="where citry's constant markers come off: a helper in each "
-                "module, or your own base class",
+                "module, your own base class, or the PlainInputs extension, "
+                "which marks the code that needs it",
             ),
             arg(
                 "--tag-prefix",
@@ -216,6 +231,12 @@ COMMANDS = (
             ),
             arg("-w", "--write", action="store_true"),
         ),
+    ),
+    Command(
+        "extension",
+        "write the PlainInputs extension into a project",
+        extension,
+        (arg("--out"),),
     ),
 )
 

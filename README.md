@@ -53,11 +53,24 @@ djc-to-citry scan     components.py --mode pure
 djc-to-citry migrate  components.py --mode pure --out migrated.py
 djc-to-citry migrate  components.py --rename old_pkg.components=new_pkg
 djc-to-citry migrate  components.py --base mylib.component.Base --unwrap base
+djc-to-citry extension --out yourapp/plain_inputs.py
 djc-to-citry residue  .djc-to-citry/residue.json --full
 djc-to-citry template templates/ --write
 ```
 
-`--base` names the class the components inherit from: `Component`, `LibraryComponent`, or a dotted path to your own. Citry hands component code its constants wrapped in a transparent proxy, which ordinary Python does not always accept, so each module gets a small `_plain()` that unwraps them. A base class of your own can do that once for the whole library instead: `--unwrap base` drops the helper and leaves it to the base.
+`--base` names the class the components inherit from: `Component`, `LibraryComponent`, or a dotted path to your own.
+
+Citry hands component code its constants wrapped in a transparent proxy. It passes `isinstance()`, but `x is True` and `x is None` are silently False and `re`, `str.join`, `os.fspath` and a validating `Kwargs` reject it. django-components has no such marker, so migrated code is written as if there were none. `--unwrap` says where that is dealt with:
+
+| | |
+|---|---|
+| `inline` (default) | each module gets a small `_plain()` that unwraps the inputs |
+| `base` | your own base class does it once for the whole library |
+| `extension` | the `PlainInputs` extension does it for the whole application, and the tool marks the code that depends on it |
+
+`djc-to-citry extension` writes that extension into your project; install it with `Citry(extensions=[PlainInputs])`. It unwraps the inputs before citry builds the typed `Kwargs` and marks the pass-through values again before citry looks for its constants, so the engine optimizes exactly what it would have without it. It is a stopgap for [citry#107](https://github.com/citry-dev/citry/issues/107), which will hand component code plain values from the engine.
+
+Detection is honest about its reach: it finds an identity test and a call into an API that rejects the proxy, both decidable from the code. A call into a helper that does either of those inside is not.
 
 `template` translates django-components syntax wherever it appears - a template file, or the template strings inside a Python module - without touching the code around it.
 
