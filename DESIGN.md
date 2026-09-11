@@ -91,14 +91,13 @@ The last one is the safety net. Every name whose import the tool removes is reco
 
 Some Django behaviour has no single Python equivalent. The tool does not guess; it reads what the source declares.
 
-**Dotted lookup.** Django resolves `item.active` as a dict key first and an
-attribute second. Citry evaluates Python, where those differ. Rather than picking one, the tool reads the component's own annotation: a `Kwargs` field declared `list[dict]` that reaches the template means the loop items are dicts, and only then is the lookup written as a subscript.
+**Dotted lookup.** Django resolves `item.active` as a dict key first and an attribute second. Citry evaluates Python, where those differ. Rather than picking one, the tool reads the component's own annotation: a `Kwargs` field declared `list[dict]` that reaches the template means the loop items are dicts, and only then is the lookup written as a subscript.
 
-**Implicit calls.** Django calls a callable it finds during lookup. Where the
-expression is hoisted into `template_data`, that runs in ordinary Python and the test can be written out: `(x() if callable(x) else x)`.
+**Implicit calls.** Django calls a callable it finds during lookup. Where the expression is hoisted into `template_data`, that runs in ordinary Python and the test can be written out: `(x() if callable(x) else x)`.
 
-**The loop variable.** Citry has none. A body that reads `forloop` gets its
-index from an enumeration the component prepares.
+**The loop variable.** Citry has none. A body that reads `forloop` gets its index from an enumeration the component prepares.
+
+**Constant inputs.** Citry marks a value it knows at parse time with a transparent proxy, so `x is True` is False and `re` and `str.join` reject it. Django code that reaches `template_data` assumes ordinary values, so every rewritten data method opens by unwrapping its inputs with an emitted `_plain(kwargs)`. Doing it per component rather than at the engine's input hook leaves citry's own constness intact, so a component that citry would cache stays cached.
 
 ## Modules
 

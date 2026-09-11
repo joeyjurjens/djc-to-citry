@@ -185,3 +185,25 @@ def test_on_render_binds_only_what_the_body_uses():
     out = migrate(source)
     assert "context = self._render_context" in out
     assert "content = result" not in out
+
+
+def test_a_data_method_unwraps_its_inputs_first():
+    """Citry's constant proxy breaks `re` and `is True`; unwrap at the boundary."""
+    import ast
+
+    out = migrate(COMPONENT)
+    assert "def _plain(kwargs):" in out
+    assert "from citry import const_value" in out
+    fn = next(
+        node
+        for node in ast.walk(ast.parse(out))
+        if isinstance(node, ast.FunctionDef) and node.name == "template_data"
+    )
+    assert ast.unparse(fn.body[0]) == "kwargs = _plain(kwargs)"
+
+
+def test_the_helper_is_emitted_once_for_a_module_of_components():
+    source = COMPONENT + COMPONENT.replace("class A(", "class B(").replace(
+        "from django_components import Component\n", ""
+    )
+    assert migrate(source).count("def _plain(kwargs):") == 1

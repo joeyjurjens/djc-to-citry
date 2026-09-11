@@ -68,6 +68,7 @@ class ComponentTransformer(cst.CSTTransformer):
         self.app = app
         self.tag_prefix = tag_prefix
         self.needs_sibling = False
+        self.needs_plain = False
         self.needs_context_stash = False
         self.needs_markup = False
         self._in_render_hook = False
@@ -323,9 +324,14 @@ class ComponentTransformer(cst.CSTTransformer):
         params = [p for p in fn.params.params if p.name.value not in {"args", "context"}]
         if params:  # drop the trailing comma libcst keeps on the removed tail
             params = params[:-1] + [params[-1].with_changes(comma=cst.MaybeSentinel.DEFAULT)]
+        self.needs_plain = True
+        body = fn.body
         return fn.with_changes(
             name=cst.Name(new_name),
             params=fn.params.with_changes(params=params),
+            body=body.with_changes(
+                body=[cst.parse_statement("kwargs = _plain(kwargs)"), *body.body]
+            ),
         )
 
 
@@ -562,8 +568,9 @@ def migrate_source(
             extra.append(f"from {module} import {name}")
     if extra:
         out = "\n".join(extra) + "\n" + out
-    if tf.needs_sibling:
-        out = _after_imports(out, SIBLING)
+    for needed, block in ((tf.needs_plain, PLAIN), (tf.needs_sibling, SIBLING)):
+        if needed:
+            out = _after_imports(out, block)
     _refuse_undefined(out, tf.dropped, known)
     return out, info
 
@@ -660,6 +667,27 @@ def _after_imports(source: str, block: str) -> str:
     lines = source.split("\n")
     at = max(n.end_lineno or n.lineno for n in imports)
     return "\n".join(lines[:at] + ["", block.rstrip()] + lines[at:])
+
+
+PLAIN = '''from types import SimpleNamespace
+
+from citry import const_value
+
+
+def _plain(kwargs):
+    """The component's inputs as ordinary Python values.
+
+    Citry marks a template constant with a transparent proxy. It compares and
+    stringifies like the value it wraps, but `re`, `os.fspath` and `str.join`
+    reject it and `x is True` is False. Unwrapping here rather than at the
+    engine's input hook leaves citry's own constness intact, so a cached
+    component stays cached.
+    """
+    fields = getattr(type(kwargs), "__slots__", None) or type(kwargs).__annotations__
+    return SimpleNamespace(**{name: const_value(getattr(kwargs, name)) for name in fields})
+
+
+'''
 
 
 SIBLING = '''def _sibling(component, own, wanted):
