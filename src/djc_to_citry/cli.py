@@ -127,7 +127,7 @@ def template(args) -> int:
         path = pathlib.Path(raw)
         files = sorted(path.rglob("*.py")) if path.is_dir() else [path]
         for f in files:
-            result = rewrite(f.read_text(), args.mode)
+            result = rewrite(f.read_text(), args.mode, args.tag_prefix)
             total += result.translated
             failed += len(result.markers)
             if args.write:
@@ -197,7 +197,17 @@ COMMANDS = (
         "template",
         "translate template text outside a component",
         template,
-        (arg("paths", nargs="+"), MODE, arg("-w", "--write", action="store_true")),
+        (
+            arg("paths", nargs="+"),
+            MODE,
+            arg(
+                "--tag-prefix",
+                default="",
+                metavar="bs-",
+                help="the prefix the converted library publishes its components under",
+            ),
+            arg("-w", "--write", action="store_true"),
+        ),
     ),
 )
 

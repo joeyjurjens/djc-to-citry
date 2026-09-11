@@ -684,10 +684,10 @@ class Rewrite:
     markers: list[Marker] = field(default_factory=list)
 
 
-def rewrite(text: str, mode: str = "pure") -> Rewrite:
+def rewrite(text: str, mode: str = "pure", prefix: str = "") -> Rewrite:
     """Translate a whole template file, or the template literals in a module."""
     if not text.lstrip().startswith(("import ", "from ")) and "class " not in text:
-        result = translate(text, mode=mode)
+        result = translate(text, mode=mode, prefix=prefix)
         return Rewrite(result.template, 1, result.markers)
 
     from .codemod import TEMPLATE_RE
@@ -695,7 +695,7 @@ def rewrite(text: str, mode: str = "pure") -> Rewrite:
     seen = Rewrite("", 0, [])
 
     def one(match):
-        result = translate(match.group("body"), mode=mode)
+        result = translate(match.group("body"), mode=mode, prefix=prefix)
         seen.translated += 1
         seen.markers.extend(result.markers)
         indent = match.group("indent")
@@ -703,8 +703,8 @@ def rewrite(text: str, mode: str = "pure") -> Rewrite:
             (indent + "    " + line.strip()) if line.strip() else ""
             for line in result.template.strip().splitlines()
         )
-        prefix = "r" if "\\" in body else ""
-        return f'{indent}template = {prefix}"""\n{body}\n{indent}"""'
+        raw = "r" if "\\" in body else ""
+        return f'{indent}template = {raw}"""\n{body}\n{indent}"""'
 
     seen.text = TEMPLATE_RE.sub(one, text)
     return seen
