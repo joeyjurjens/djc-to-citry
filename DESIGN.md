@@ -97,7 +97,7 @@ Some Django behaviour has no single Python equivalent. The tool does not guess; 
 
 **The loop variable.** Citry has none. A body that reads `forloop` gets its index from an enumeration the component prepares.
 
-**Constant inputs.** Citry marks a value it knows at parse time with a transparent proxy, so `x is True` is False and `re` and `str.join` reject it. Django code that reaches `template_data` assumes ordinary values, so every rewritten data method opens by unwrapping its inputs with an emitted `_plain(kwargs)`. Doing it per component rather than at the engine's input hook leaves citry's own constness intact, so a component that citry would cache stays cached.
+**Constant inputs.** Citry marks a value it knows at parse time with a transparent proxy, so `x is True` is False and `re`, `str.join` and `os.fspath` reject it. Django code that reaches `template_data` assumes ordinary values, so every rewritten data method opens by unwrapping its inputs with an emitted `_plain(kwargs)`. An engine extension would be the wrong place: its only input hook mutates citry's authoritative mapping, for every component in the application, not just the migrated ones. A library that gives its components a shared base class can unwrap there instead, once: `--base mylib.component.Base --unwrap base` emits the import, drops the helper, and leaves the unwrapping to the base.
 
 ## Modules
 

@@ -63,8 +63,10 @@ class ComponentTransformer(cst.CSTTransformer):
         renames: dict[str, str] | None = None,
         app: str = "",
         tag_prefix: str = "",
+        unwrap: str = "inline",
     ):
-        self.base = base
+        self.base_module, _, self.base = base.rpartition(".")
+        self.unwrap = unwrap
         self.app = app
         self.tag_prefix = tag_prefix
         self.needs_sibling = False
@@ -155,11 +157,14 @@ class ComponentTransformer(cst.CSTTransformer):
                 for n in names
                 if str(n.name.value) in RENAMED and str(n.name.value) != "mark_safe"
             ]
-            wanted.append(self.base)
+            if not self.base_module:
+                wanted.append(self.base)
             if self.needs_merge_attrs:
                 wanted.append("merge_attrs")
             if self.needs_markup:
                 wanted.append("Markup")
+            if not wanted:  # the base came from elsewhere and nothing else is used
+                return cst.RemoveFromParent()
             return updated_node.with_changes(
                 module=cst.Name("citry"),
                 names=[cst.ImportAlias(name=cst.Name(n)) for n in sorted(set(wanted))],
@@ -324,13 +329,16 @@ class ComponentTransformer(cst.CSTTransformer):
         params = [p for p in fn.params.params if p.name.value not in {"args", "context"}]
         if params:  # drop the trailing comma libcst keeps on the removed tail
             params = params[:-1] + [params[-1].with_changes(comma=cst.MaybeSentinel.DEFAULT)]
-        self.needs_plain = True
-        body = fn.body
-        return fn.with_changes(
+        renamed = fn.with_changes(
             name=cst.Name(new_name),
             params=fn.params.with_changes(params=params),
-            body=body.with_changes(
-                body=[cst.parse_statement("kwargs = _plain(kwargs)"), *body.body]
+        )
+        if self.unwrap != "inline":
+            return renamed
+        self.needs_plain = True
+        return renamed.with_changes(
+            body=fn.body.with_changes(
+                body=[cst.parse_statement("kwargs = _plain(kwargs)"), *fn.body.body]
             ),
         )
 
@@ -546,13 +554,16 @@ def migrate_source(
     known: frozenset[str] = frozenset(),
     app: str = "",
     tag_prefix: str = "",
+    unwrap: str = "inline",
 ):
     classes = dict.fromkeys(n for n, _, _ in class_spans(source, "Component"))
     source, info = rewrite_templates(source, classes, mode=mode, tag_prefix=tag_prefix)
     wanted = {(module, name) for r in info.values() for module, name in r.imports}
 
     tree = cst.parse_module(source)
-    tf = ComponentTransformer(base=base, renames=renames, app=app, tag_prefix=tag_prefix)
+    tf = ComponentTransformer(
+        base=base, renames=renames, app=app, tag_prefix=tag_prefix, unwrap=unwrap
+    )
     tf.needs_merge_attrs = ("citry", "merge_attrs") in wanted
     tf.needs_markup = ("citry", "Markup") in wanted or "mark_safe" in source
     tf.defaults = declared_defaults(source)
@@ -562,6 +573,8 @@ def migrate_source(
     out = inject_hoisted(out, info)
     # A filter the project defines is an ordinary function the component calls.
     extra = sorted(f"from {m} import {n}" for m, n in wanted if m != "citry")
+    if tf.base_module:
+        extra.append(f"from {tf.base_module} import {tf.base}")
     if app and base == "Component":
         module, _, name = app.rpartition(".")
         if module:
@@ -595,11 +608,18 @@ def migrate_module(
     renames: dict[str, str] | None = None,
     app: str = "",
     tag_prefix: str = "",
+    unwrap: str = "inline",
 ):
     """Whole module at once; per-class on refusal, collecting a Marker each."""
     try:
         out, info = migrate_source(
-            source, base=base, mode=mode, renames=renames, app=app, tag_prefix=tag_prefix
+            source,
+            base=base,
+            mode=mode,
+            renames=renames,
+            app=app,
+            tag_prefix=tag_prefix,
+            unwrap=unwrap,
         )
     except Unmigratable:
         pass
@@ -618,6 +638,7 @@ def migrate_module(
                 known=known,
                 app=app,
                 tag_prefix=tag_prefix,
+                unwrap=unwrap,
             )
         except Unmigratable as e:
             markers.append(e.marker.at(name))

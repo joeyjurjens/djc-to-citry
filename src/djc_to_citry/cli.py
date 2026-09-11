@@ -47,6 +47,7 @@ def migrate(args) -> int:
     out, markers, ok = migrate_module(
         source,
         base=args.base,
+        unwrap=args.unwrap,
         mode=args.mode,
         renames=dict(args.rename),
         app=args.app,
@@ -158,8 +159,15 @@ COMMANDS = (
             arg(
                 "--base",
                 default="Component",
-                choices=["Component", "LibraryComponent"],
-                help="Component for a project, LibraryComponent for a distributable library",
+                metavar="CLASS",
+                help="Component, LibraryComponent, or a dotted path to your own base class",
+            ),
+            arg(
+                "--unwrap",
+                default="inline",
+                choices=["inline", "base"],
+                help="where citry's constant markers come off: a helper in each "
+                "module, or your own base class",
             ),
             arg(
                 "--tag-prefix",

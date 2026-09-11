@@ -52,9 +52,12 @@ Dispatch is on the node class Django itself produced, so a construct with no han
 djc-to-citry scan     components.py --mode pure
 djc-to-citry migrate  components.py --mode pure --out migrated.py
 djc-to-citry migrate  components.py --rename old_pkg.components=new_pkg
+djc-to-citry migrate  components.py --base mylib.component.Base --unwrap base
 djc-to-citry residue  .djc-to-citry/residue.json --full
 djc-to-citry template templates/ --write
 ```
+
+`--base` names the class the components inherit from: `Component`, `LibraryComponent`, or a dotted path to your own. Citry hands component code its constants wrapped in a transparent proxy, which ordinary Python does not always accept, so each module gets a small `_plain()` that unwraps them. A base class of your own can do that once for the whole library instead: `--unwrap base` drops the helper and leaves it to the base.
 
 `template` translates django-components syntax wherever it appears - a template file, or the template strings inside a Python module - without touching the code around it.
 

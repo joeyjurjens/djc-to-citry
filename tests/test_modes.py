@@ -65,6 +65,12 @@ def migrate(body: str) -> str:
     return migrate_source(body)[0]
 
 
+def migrate_with(body: str, **options) -> str:
+    from djc_to_citry.codemod import migrate_source
+
+    return migrate_source(body, **options)[0]
+
+
 COMPONENT = (
     "from django_components import Component\n"
     "class A(Component):\n"
@@ -207,3 +213,15 @@ def test_the_helper_is_emitted_once_for_a_module_of_components():
         "from django_components import Component\n", ""
     )
     assert migrate(source).count("def _plain(kwargs):") == 1
+
+
+def test_a_dotted_base_is_imported_from_its_own_module():
+    out = migrate_with(COMPONENT, base="mylib.component.Base")
+    assert "from mylib.component import Base" in out
+    assert "class A(Base):" in out
+    assert "LibraryComponent" not in out
+
+
+def test_a_base_that_unwraps_leaves_the_data_method_alone():
+    out = migrate_with(COMPONENT, base="mylib.component.Base", unwrap="base")
+    assert "_plain" not in out
