@@ -57,8 +57,14 @@ class Unmigratable(Exception):
 
 
 class ComponentTransformer(cst.CSTTransformer):
-    def __init__(self, base: str = "LibraryComponent", renames: dict[str, str] | None = None):
+    def __init__(
+        self,
+        base: str = "Component",
+        renames: dict[str, str] | None = None,
+        app: str = "",
+    ):
         self.base = base
+        self.app = app
         self.needs_context_stash = False
         self.needs_markup = False
         self._in_render_hook = False
@@ -93,7 +99,14 @@ class ComponentTransformer(cst.CSTTransformer):
             isinstance(b.value, cst.Name) and b.value.value == "Component"
             for b in original_node.bases
         ):
-            return updated_node.with_changes(bases=[cst.Arg(value=cst.Name(self.base))])
+            updated_node = updated_node.with_changes(bases=[cst.Arg(value=cst.Name(self.base))])
+            if self.app and self.base == "Component":
+                # An ordinary component belongs to one engine; a library
+                # definition may not name one at all.
+                binding = cst.parse_statement(f"citry = {self.app.rpartition('.')[2]}")
+                body = updated_node.body
+                return updated_node.with_changes(body=body.with_changes(body=[binding, *body.body]))
+            return updated_node
         kept = [
             b
             for b in updated_node.bases
@@ -487,17 +500,18 @@ def inject_hoisted(source: str, info: dict) -> str:
 
 def migrate_source(
     source: str,
-    base: str = "LibraryComponent",
+    base: str = "Component",
     mode: str = "pure",
     renames: dict[str, str] | None = None,
     known: frozenset[str] = frozenset(),
+    app: str = "",
 ):
     classes = dict.fromkeys(n for n, _, _ in class_spans(source, "Component"))
     source, info = rewrite_templates(source, classes, mode=mode)
     wanted = {(module, name) for r in info.values() for module, name in r.imports}
 
     tree = cst.parse_module(source)
-    tf = ComponentTransformer(base=base, renames=renames)
+    tf = ComponentTransformer(base=base, renames=renames, app=app)
     tf.needs_merge_attrs = ("citry", "merge_attrs") in wanted
     tf.needs_markup = ("citry", "Markup") in wanted or "mark_safe" in source
     tf.defaults = declared_defaults(source)
@@ -505,11 +519,15 @@ def migrate_source(
     if tf.needs_dataclass:
         out = "from dataclasses import dataclass, field\n" + out
     out = inject_hoisted(out, info)
-    _refuse_undefined(out, tf.dropped, known)
     # A filter the project defines is an ordinary function the component calls.
     extra = sorted(f"from {m} import {n}" for m, n in wanted if m != "citry")
+    if app and base == "Component":
+        module, _, name = app.rpartition(".")
+        if module:
+            extra.append(f"from {module} import {name}")
     if extra:
         out = "\n".join(extra) + "\n" + out
+    _refuse_undefined(out, tf.dropped, known)
     return out, info
 
 
@@ -528,13 +546,14 @@ def _markers(info: dict) -> list[Marker]:
 
 def migrate_module(
     source: str,
-    base: str = "LibraryComponent",
+    base: str = "Component",
     mode: str = "pure",
     renames: dict[str, str] | None = None,
+    app: str = "",
 ):
     """Whole module at once; per-class on refusal, collecting a Marker each."""
     try:
-        out, info = migrate_source(source, base=base, mode=mode, renames=renames)
+        out, info = migrate_source(source, base=base, mode=mode, renames=renames, app=app)
     except Unmigratable:
         pass
     else:
@@ -544,7 +563,9 @@ def migrate_module(
     pieces, markers, ok = [], [], 0
     for i, (name, block) in enumerate(split_classes(source)):
         try:
-            got, info = migrate_source(block, base=base, mode=mode, renames=renames, known=known)
+            got, info = migrate_source(
+                block, base=base, mode=mode, renames=renames, known=known, app=app
+            )
         except Unmigratable as e:
             markers.append(e.marker.at(name))
         else:

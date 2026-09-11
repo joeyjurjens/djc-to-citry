@@ -45,7 +45,7 @@ def migrate(args) -> int:
 
     source = pathlib.Path(args.path).read_text()
     out, markers, ok = migrate_module(
-        source, base=args.base, mode=args.mode, renames=dict(args.rename)
+        source, base=args.base, mode=args.mode, renames=dict(args.rename), app=args.app
     )
 
     if ok == 0 and markers:
@@ -150,7 +150,18 @@ COMMANDS = (
             arg("path"),
             arg("--out"),
             MODE,
-            arg("--base", default="LibraryComponent", choices=["LibraryComponent", "Component"]),
+            arg(
+                "--base",
+                default="Component",
+                choices=["Component", "LibraryComponent"],
+                help="Component for a project, LibraryComponent for a distributable library",
+            ),
+            arg(
+                "--app",
+                default="",
+                metavar="module.attr",
+                help="bind each Component to this Citry instance, e.g. myproject.components.app",
+            ),
             arg(
                 "--rename",
                 action="append",
