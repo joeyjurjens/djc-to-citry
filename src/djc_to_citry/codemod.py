@@ -711,44 +711,51 @@ def declared_defaults(source: str) -> dict[str, dict[str, str]]:
     in `Default(...)`. citry reads defaults off the `Kwargs` field itself, and a
     dataclass field factory has the same render-time semantics, so the two
     forms map directly.
+
+    The expression is taken as the author wrote it. Reconstructing it from an
+    AST would reformat it, and `ast.unparse` does not even agree with itself
+    across Python versions.
     """
+    module = cst.parse_module(source)
     found: dict[str, dict[str, str]] = {}
-    for node in ast.walk(ast.parse(source)):
-        if not isinstance(node, ast.ClassDef):
+    for node in module.body:
+        if not isinstance(node, cst.ClassDef):
             continue
-        for inner in node.body:
-            if not isinstance(inner, ast.ClassDef) or inner.name != "Defaults":
+        for inner in node.body.body:
+            if not isinstance(inner, cst.ClassDef) or inner.name.value != "Defaults":
                 continue
-            values: dict[str, str] = {}
-            for item in inner.body:
-                target = _sole_target(item)
-                if target is None or not isinstance(item, ast.AnnAssign | ast.Assign):
-                    continue
-                values[target] = _default_source(item.value)
+            values = {
+                name: _default_source(value, module)
+                for statement in inner.body.body
+                for name, value in _assignments(statement)
+            }
             if values:
-                found[node.name] = values
+                found[node.name.value] = values
     return found
 
 
-def _sole_target(item) -> str | None:
-    if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name):
-        return item.target.id
-    if (
-        isinstance(item, ast.Assign)
-        and len(item.targets) == 1
-        and isinstance(item.targets[0], ast.Name)
-    ):
-        return item.targets[0].id
-    return None
+def _assignments(statement):
+    """`x = expr` or `x: T = expr`, as (name, value)."""
+    if not isinstance(statement, cst.SimpleStatementLine):
+        return
+    for entry in statement.body:
+        if isinstance(entry, cst.AnnAssign) and isinstance(entry.target, cst.Name):
+            if entry.value is not None:
+                yield entry.target.value, entry.value
+        elif isinstance(entry, cst.Assign) and len(entry.targets) == 1:
+            target = entry.targets[0].target
+            if isinstance(target, cst.Name):
+                yield target.value, entry.value
 
 
-def _default_source(value) -> str:
+def _default_source(value, module: cst.Module) -> str:
     """`Default(f)` defers to render time; a dataclass factory does the same."""
+    code = module.code_for_node(value).strip()
     if (
-        isinstance(value, ast.Call)
-        and isinstance(value.func, ast.Name)
-        and value.func.id == "Default"
+        isinstance(value, cst.Call)
+        and isinstance(value.func, cst.Name)
+        and value.func.value == "Default"
         and len(value.args) == 1
     ):
-        return f"field(default_factory={ast.unparse(value.args[0])})"
-    return ast.unparse(value)
+        return f"field(default_factory={module.code_for_node(value.args[0].value).strip()})"
+    return code

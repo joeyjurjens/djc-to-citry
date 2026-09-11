@@ -6,6 +6,16 @@ library to [citry](https://citry.dev).
 The tool translates components and the way they are used. It does not scaffold a
 package, port tests, or rearrange your project.
 
+> Every line of this was written by an AI, working from the django-components
+> and citry references. It was built to move two real libraries and is tested
+> against them - [django-components-bootstrap](https://github.com/joeyjurjens/django-components-bootstrap)
+> (119 components) became [citry-bootstrap](https://github.com/joeyjurjens/citry-bootstrap),
+> and [djc-phosphor-icons](https://github.com/joeyjurjens/djc-phosphor-icons) became
+> [citry-phosphor-icons](https://github.com/joeyjurjens/citry-phosphor-icons).
+> Those two are the whole of its field experience, so expect a library that uses
+> django-components differently to hit something neither of them does. It
+> refuses rather than guesses when it can tell, but it cannot tell everything.
+
 ## How it works
 
 Neither framework's parser is enough on its own, so the tool uses both.
@@ -78,7 +88,7 @@ comment.
 | `{% component %}` | `<c-name>`, kebab-case |
 | `{% slot %}` / `{% fill %}` | `<c-slot>` / `<c-fill>` |
 | `{% provide %}` | `<c-provide>` |
-| `{% html_attrs %}` | one `c-bind` per element, merged in `template_data` |
+| `{% html_attrs %}` | `merge_attrs()` in `template_data`, bound with one `c-bind` |
 | `{% cache %}` | `<c-cache>` |
 | `{% component_css_dependencies %}` | `<c-css>` |
 | `{% if %}` / `{% for %}` | `c-if` / `c-for`, or a bound dict inside a start tag |
