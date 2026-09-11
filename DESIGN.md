@@ -92,9 +92,11 @@ data["len"] = len
 ```
 
 Hoisted names are derived from the element they belong to (`button_attrs`,
-`h2_attrs`) rather than numbered, and citry allows one `c-bind` per element, so
-everything contributing attributes to the same start tag is merged into one
-expression.
+`h2_attrs`) rather than numbered, and everything contributing attributes to the
+same start tag is merged into one `merge_attrs` call. Citry does allow several
+`c-bind` attributes, but it merges `class` and `style` across them only on HTML
+elements; component inputs are last-one-wins. Merging in Python keeps
+`{% html_attrs %}` behaving the same on both.
 
 ## Where the tool refuses
 

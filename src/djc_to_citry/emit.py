@@ -280,9 +280,12 @@ def _conditional_part(node, tokens, index: int, end: int, w: Writer) -> str | No
 def _whole_spans(source: str, tokens, w: Writer, nodes) -> dict[int, tuple[int, str]]:
     """Ranges citry cannot express piecemeal, replaced as a unit.
 
-    Citry allows one `c-bind` per element, so everything that contributes
-    attributes to the same start tag -- every `{% html_attrs %}` and every
-    conditional group -- is merged into a single bound expression.
+    Everything contributing attributes to the same start tag - every
+    `{% html_attrs %}` and every conditional group - is merged into one
+    `merge_attrs` call. Citry does allow several `c-bind` attributes, but it
+    merges `class` and `style` across them only on HTML elements; component
+    inputs are last-one-wins. Merging in Python keeps `{% html_attrs %}`
+    behaving the same on both.
     """
     spans: dict[int, tuple[int, str]] = {}
     inside = [(t.position[0], t.position[1]) for t in tokens]
