@@ -52,7 +52,7 @@ Dispatch is on the node class Django itself produced, so a construct with no han
 djc-to-citry scan     components.py --mode pure
 djc-to-citry migrate  components.py --mode pure --out migrated.py
 djc-to-citry migrate  components.py --rename old_pkg.components=new_pkg
-djc-to-citry migrate  components.py --base mylib.component.Base --unwrap base
+djc-to-citry migrate  components.py --base mylib.component.Base --unwrap none
 djc-to-citry extension --out yourapp/plain_inputs.py
 djc-to-citry residue  .djc-to-citry/residue.json --full
 djc-to-citry template templates/ --write
@@ -65,8 +65,8 @@ Citry hands component code its constants wrapped in a transparent proxy. It pass
 | | |
 |---|---|
 | `inline` (default) | each module gets a small `_plain()` that unwraps the inputs |
-| `base` | your own base class does it once for the whole library |
-| `extension` | the `PlainInputs` extension does it for the whole application, and the tool marks the code that depends on it |
+| `none` | something you install yourself deals with it: the `PlainInputs` extension, or a base class of your own |
+| `mark` | the same, and the tool marks the code that depends on whatever you installed |
 
 `djc-to-citry extension` writes that extension into your project; install it with `Citry(extensions=[PlainInputs])`. It unwraps the inputs before citry builds the typed `Kwargs` and marks the pass-through values again before citry looks for its constants, so the engine optimizes exactly what it would have without it. It is a stopgap for [citry#107](https://github.com/citry-dev/citry/issues/107), which will hand component code plain values from the engine.
 

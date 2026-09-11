@@ -223,5 +223,5 @@ def test_a_dotted_base_is_imported_from_its_own_module():
 
 
 def test_a_base_that_unwraps_leaves_the_data_method_alone():
-    out = migrate_with(COMPONENT, base="mylib.component.Base", unwrap="base")
+    out = migrate_with(COMPONENT, base="mylib.component.Base", unwrap="none")
     assert "_plain" not in out

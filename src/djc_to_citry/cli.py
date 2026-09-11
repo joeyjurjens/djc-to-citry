@@ -179,10 +179,10 @@ COMMANDS = (
             arg(
                 "--unwrap",
                 default="inline",
-                choices=["inline", "base", "extension"],
-                help="where citry's constant markers come off: a helper in each "
-                "module, your own base class, or the PlainInputs extension, "
-                "which marks the code that needs it",
+                choices=["inline", "none", "mark"],
+                help="what to do about citry's constant markers: unwrap them with a "
+                "helper in each module, leave it to something you install "
+                "yourself, or leave it and mark the code that depends on it",
             ),
             arg(
                 "--tag-prefix",

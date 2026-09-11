@@ -625,7 +625,7 @@ def migrate_module(
     except Unmigratable:
         pass
     else:
-        advice = advise(out) if unwrap == "extension" else []
+        advice = advise(out) if unwrap == "mark" else []
         return out, _markers(info) + advice, len(list(split_classes(source)))
 
     known = module_names(source)
@@ -649,7 +649,7 @@ def migrate_module(
             markers.extend(_markers(info))
             ok += 1
     out = "\n\n".join(pieces)
-    if unwrap == "extension" and out:
+    if unwrap == "mark" and out:
         markers.extend(advise(out))
     return out, markers, ok
 
