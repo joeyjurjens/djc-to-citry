@@ -29,11 +29,12 @@ class PlainInputs(Extension):
     before citry looks for its constants, so the engine optimizes exactly what
     it would have optimized without this extension.
 
-    Two differences from citry's own behavior remain. `is_const()` on a
-    component's inputs is always False; read `raw_kwargs`, which citry's docs
-    already point at for this, to see what was marked. And a marked value that
-    `template_data` puts inside a list or dict it builds loses its marker,
-    where citry would have carried it into the child component.
+    Two differences from citry's own behavior remain. Which inputs were marked
+    is no longer observable from component code: `on_component_input` hands out
+    the authoritative mapping, so `raw_kwargs` is unwrapped too and `is_const()`
+    is always False. And a marked value that `template_data` puts inside a list
+    or dict it builds loses its marker, where citry would have carried it into
+    the child component. What citry optimizes is unchanged either way.
     """
 
     name = "plain_inputs"
