@@ -1,10 +1,8 @@
 # djc-to-citry
 
-Migrate a [django-components](https://github.com/django-components/django-components)
-library to [citry](https://citry.dev).
+Migrate a [django-components](https://github.com/django-components/django-components) library to [citry](https://citry.dev).
 
-The tool translates components and the way they are used. It does not scaffold a
-package, port tests, or rearrange your project.
+The tool translates components and the way they are used. It does not scaffold a package, port tests, or rearrange your project.
 
 > Every line of this was written by an AI, working from the django-components
 > and citry references. It was built to move two real libraries and is tested
@@ -33,14 +31,9 @@ Django's Parser  ──▶  what each tag means, with source positions
                                               citry's parser validates ◀───┘
 ```
 
-Citry's parser is asked to read a *Django* template, with the Django tags
-declared foreign. That is how the tool knows a `{% if %}` sits inside a start
-tag rather than between elements, or that a `{% slot %}` is inside a
-`<textarea>` where citry parses nothing. Those were the cases that used to need
-guessing.
+Citry's parser is asked to read a *Django* template, with the Django tags declared foreign. That is how the tool knows a `{% if %}` sits inside a start tag rather than between elements, or that a `{% slot %}` is inside a `<textarea>` where citry parses nothing. Those were the cases that used to need guessing.
 
-Dispatch is on the node class Django itself produced, so a construct with no
-handler cannot pass silently - it becomes a marker.
+Dispatch is on the node class Django itself produced, so a construct with no handler cannot pass silently - it becomes a marker.
 
 ## Modes
 
@@ -51,8 +44,7 @@ handler cannot pass silently - it becomes a marker.
 | Django tags and filters | translated, or refused | kept where citry has no equivalent |
 | For | a distributable component library | migrating an existing Django app |
 
-`compat` translates to citry first and keeps the original only where citry's
-parser rejects the result.
+`compat` translates to citry first and keeps the original only where citry's parser rejects the result.
 
 ## Use
 
@@ -64,12 +56,9 @@ djc-to-citry residue  .djc-to-citry/residue.json --full
 djc-to-citry template templates/ --write
 ```
 
-`template` translates django-components syntax wherever it appears - a template
-file, or the template strings inside a Python module - without touching the code
-around it.
+`template` translates django-components syntax wherever it appears - a template file, or the template strings inside a Python module - without touching the code around it.
 
-Anything the tool will not guess at becomes a marker beside the code rather than
-silently wrong output:
+Anything the tool will not guess at becomes a marker beside the code rather than silently wrong output:
 
 ```python
 # MIGRATE [PY-CONFIG] Icon.Cache computes enabled at runtime
@@ -77,9 +66,7 @@ silently wrong output:
 #        anything else, so this setting has to move into the component.
 ```
 
-A module is never written with a name whose import the tool removed, and
-`migrate` refuses to write an output that would replace its input with a
-comment.
+A module is never written with a name whose import the tool removed, and `migrate` refuses to write an output that would replace its input with a comment.
 
 ## What it translates
 
